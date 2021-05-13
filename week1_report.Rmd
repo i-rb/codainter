@@ -1,0 +1,507 @@
+---
+title: "Week 1 report"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+In this notebook I am computing the functions that are mentioned in the _Week 1 Report_. When possible, I compare my results with those obtained via the 'compositions' package.
+
+```{r}
+library(compositions)
+```
+
+
+## 1.1. First Definitions
+### Function 1. Which of these variables are compositional?
+
+This function takes a set of variables in a list (each of them matrices or vectors) and returns a vector of zeros and ones. The component in position _i_, associated to the _i_ position of the input vector, should be one if that matrix add up to a constant value and zero otherwise. This could be adjusted to add up approximately to a constant because of the roundings in transformed variables and so.
+
+
+```{r}
+which_coda=function(l,eps){ # l = list of variables, # eps = allowed error
+  result = numeric()
+  for (i in l){
+    if (is.integer(dim(i)[2])==TRUE){
+      range = max(rowSums(i))-min(rowSums(i))
+      if (range<=eps){result <- c(result, 1)}
+      else{result <- c(result, 0)}
+    }
+    else{result <- c(result, 0)}
+  }
+  return(result)
+}
+```
+
+
+We are doing a tiny example for a simple vector which cannot be compositional data by definition, a matrix which apparently is a compositional vector and a matrix that is not. 
+
+
+
+```{r}
+m1 = matrix(c(0.25,0.249999,0.2,0.2))
+m1 <- cbind(m1, c(0.3, 0.3, 0.3, 0.35))
+m1 <- cbind(m1, c(0.45, 0.45, 0.5, 0.45)) # definig the comp matrix
+
+m2 = matrix(c(0.25,0.249999,0.2,0.2))
+m2 <- cbind(m2, c(0.3, 0.9, 0.3, 0.35))
+m2 <- cbind(m2, c(0.45, 0.45, 0.5, 0.65)) # definig the non comp matrix
+
+v1 = c(1,2,2,1) # simple vector
+lex = list(v1,m1,m2)
+```
+
+Vector:
+```{r}
+v1
+```
+
+
+Compositional Matrix: 
+```{r}
+m1
+```
+
+Non Compositional Matrix: 
+```{r}
+m2
+```
+
+Results if no deviation for the sum of the components is allowed:
+```{r}
+which_coda(lex,0)
+```
+
+Results if a tiny (0.001) deviation for the sum of the components is allowed:
+```{r}
+which_coda(lex,0.001)
+```
+
+
+### Function 2. Closed form operator.
+
+This function returns the closed form of a given compositional vector (given as a matrix).
+
+```{r}
+C=function(x, k){ # x the matrix of the variable, k the constant (=1 if missing)
+  if (missing(k)){
+    newx <- (x)/rowSums(x)
+    return(newx)
+  }
+  else{
+    newx <- (k*x)/rowSums(x)
+    return(newx)
+  }
+} 
+  
+```
+
+An example with the previously defined "m2" FOR $k=1$:
+```{r}
+C(m2)
+```
+
+An example with the previously defined "m2" FOR $k=100$:
+```{r}
+C(m2,100)
+```
+
+### Function 3. Naive Ternary plot (from scratch).
+
+Here is the code for plotting ternary diagrams. Its input is a matrix with the compositional data and its output the aforementioned plot. Of course, it is very naive -yet-.
+
+```{r}
+
+ternary=function(mat){ # depends only in the data matrix containing the compositional datA
+  x = mat[1,][1]
+  y = mat[1,][2]
+  z = mat[1,][3]
+  p=c(0.5*(2*y+z)/(x+y+z), sqrt(3/2)*(z/(x+y+z)))
+  plot(p[1],p[2],xlim=c(0,1),ylim=c(0,1), pch=20,xlab=" ",ylab=" ", cex=0.5)
+  if (nrow(mat)>1){
+    for (i in 2:nrow(mat)){
+    x = mat[i,][1]
+    y = mat[i,][2]
+    z = mat[i,][3]
+    p=c(0.5*(2*y+z)/(x+y+z), sqrt(3/2)*(z/(x+y+z)))
+    points(p[1],p[2],pch=20, cex=0.5)
+    }
+  }
+  segments(0,0,1,0)
+  segments(0.5,sqrt(3/4),0,0)
+  segments(0.5,sqrt(3/4),1,0)
+}
+```
+
+And here, one example with out 4 row "m2" matrix:
+
+```{r,fig.width=2, fig.height=2}
+ternary(m2)
+```
+
+
+I will test the 'compositions' ternary diagram:
+
+```{r}
+ac=acomp(m2)
+plot(ac)
+```
+
+_Surprisingly, it doesn't make that much difference..._
+
+## 1.2.1 The Aitchison Geometry (Operations)
+### Function 4. The perturbation.
+
+The perturbation in the Aitchison geometry is defined as $\mathbf{x}\oplus\mathbf{p} = \mathcal{C}[x_1p_1,...,x_Dp_D]$:
+
+```{r}
+pt = function (x,y){ # I prefer to keep an easy name for this kind of functions, x and y are matrix 1xD
+  return(C(x*y))
+}
+```
+
+
+We define $x_1$ and $x_2$ and use the perturbation operation.
+
+```{r}
+x1 = t(matrix(c(0.3,2,1,3)))
+x2 = t(matrix(c(3,  1,2,4)))
+
+pt(x1,x2)
+```
+
+We can see that $x_1 \oplus x_2$ lies in the simplex.
+```{r}
+sum(pt(x1,x2)) # arreglar PT
+```
+
+
+Here I replicate the example given in the "Transformations" document:
+
+```{r}
+pt(t(matrix(c(1,2,3))),t(matrix(c(1,2,1))))
+```
+
+
+
+### Function 5. The powering.
+
+The powering function is defined by  $\lambda \odot \mathbf{x} = \mathcal{C}[x_1^\lambda,...,x_D^\lambda]$. 
+
+```{r}
+pw=function(l,x){ # x the vector (matrix 1xD) and l stands for the scalar
+  return(C(x**l))
+}
+```
+
+As an example, $2\odot x_1$, which should coincide with $x_1\oplus x_1$:
+
+```{r}
+pw(2,x1) # powering
+```
+
+```{r}
+pt(x1,x1) # perturbation
+```
+
+... and  the "transformations" document example:
+
+```{r}
+pw(2,t(matrix(c(1,2,1)))) # perturbationx
+```
+
+
+
+### Function 6. The Aitchison inner product.
+
+The inner product of this geometry is defined as: $\langle \mathbf{x}, \mathbf{y} \rangle_A = \dfrac{1}{D} \sum_{i=1}^{D-1}\sum_{j=i+1}^{D} \ln\dfrac{x_i}{x_j}\ln\dfrac{y_i}{y_j}$. 
+
+```{r}
+inner = function(x,y){ # x, y are Dx1 matrices
+  result = 0
+  D = ncol(x)
+  for (i in (1:(D-1))){
+    result <- result + sum(log(x[i]/x[(i+1):D])*(log(y[i]/y[(i+1):D])))
+  }
+  return((1/D)*result)
+}
+```
+
+Thus, $\langle x_1,x_2 \rangle=-0.26672$
+
+```{r}
+inner(x1,x2)
+```
+
+
+### Function 7. The Aitchison distance.
+
+The distance is defined as $d_A(\mathbf{x},\mathbf{y}) = \left(\dfrac{1}{D} \sum_{i=1}^{D-1}\sum_{j=i+1}^{D} \left(\ln\dfrac{x_i}{x_j}-\ln\dfrac{y_i}{y_j}\right)^2\right)^{1/2}$
+
+```{r}
+dist = function(x,y){ # x,y 1xD matrices
+  result = 0
+  D = ncol(x)
+  for (i in (1:(D-1))){
+    result <- result + sum((log(x[i]/x[(i+1):D])-(log(y[i]/y[(i+1):D])))**2)
+  }
+  return(((1/D)*result)**(1/2))
+}
+```
+
+As any distance, $d_A(x_1,x_1)$ should be equal to 0 and positive otherwise:
+
+```{r}
+dist(x1,x1)
+dist(x1,x2)
+```
+
+I cannot get the equality between norm(x-y) and distance(x,y), despite it is stated in the page (p.41) of the transformations document (maybe **only a feature of the 'compositions' package**? Yes! That is!). Empirically, I even get an error because $z:=x-y$ has positive and negative components and, therefore, $ln(z_i/z_j)$ should be calculated and $\exists\; i,j$ such that $z_i\cdot z_j<0$ 
+
+```{r}
+dist(x1,x2)
+sqrt(inner(x1-x2,x1-x2))
+
+x1c = acomp(x1)   
+x2c = acomp(x2)
+norm(x1c-x2c) # composition package norm
+```
+
+
+
+### Function 8. Linear operator.
+
+The linear operator is defined as $A\boxdot\mathbf{x} = \mathcal{C}\left(\prod_{j=1}^D x_j^{a_{1j}},...,\prod_{j=1}^D x_j^{a_{Dj}}\right)^T$ for $A$ a DxD matrix and $x$ a 1xD vector.
+
+```{r}
+lin = function (A, x){ # A matrix, x vector 1xD
+  vec=numeric()
+  for (i in 1:nrow(A)){
+    vec=c(vec,prod(x[i]**A[i,]))
+  }
+  return(C(t(vec)))
+}
+```
+
+Here the function is tested:
+
+```{r}
+  v3=matrix(c(0.4,0.2,0.4)) # defining a vector
+  m3 = matrix(c(0.4,0.4,0.3))
+  m3 <- cbind(m3, c(0.3,0.1,0.3)) # defining a square matrix
+  m3 <- cbind(m3, c(0.2,0.5,0.4)) 
+  lin(m3,v3)
+```
+
+
+
+## 1.2.2 The Aitchison Geometry (Transformations)
+### Function 9. The alr transfomration.
+The alr transformation is given by: $\mathrm{alr}(\mathbf{x})=(\ln(x_1/x_D),...,\ln(x_{D-1}/x_D))$
+
+```{r}
+alr = function(x,i){   # x is a 1xD matrix, i an integer in (1,D): the "reference" element
+  if (missing(i)){     # if i is not given, the last element is used 
+    return(log(x/x[length(x)])[-length(x)])
+  }
+  else{
+    return(log(x/x[i])[-i])
+  }
+}
+```
+
+For example, the transformation for $x_1$:
+
+```{r}
+alr(x1)
+```
+
+And it coincides with the result of the 'compositions' package:
+
+```{r}
+compositions::alr(x1)[1,]
+```
+
+
+### Function 10. The ilr transformation.
+
+The ilr transformation is given by:
+
+$\mathrm{ilr}(\mathbf{x})=\mathbf{V}^T_D\ln(\mathbf{x}):=x^*$
+
+For the 3-component case (the function should be extended if needed), the matrix $\mathbf{V}_3$ is given by: $\mathbf{V}_3 = \left( \begin{matrix} \sqrt\frac{2}{3} & 0 \\ -\frac{1}{\sqrt6} & \frac{1}{\sqrt2} \\ -\frac{1}{\sqrt6} & -\frac{1}{\sqrt2}\end{matrix}\right)$
+
+```{r}
+ilr = function(x){ # x matrix 1xD as always (deprecated)
+  V3 = matrix(c(sqrt(2/3),-sqrt(1/6),-sqrt(1/6)))
+  V3 <- cbind(V3, c(0,sqrt(1/2),-sqrt(1/2))) # defining V3
+  return(t(V3)%*%log(x))
+}
+```
+
+Here, the alr transformation is used for a new vector $x_3$:
+
+```{r}
+x3=c(0.4,0.2,0.4)
+ilr(x3)
+```
+
+
+### Function 11. The ilr inverse.
+
+For this, the exponential of a matrix is needed. I will compute a naive Taylor-series based one (in order to avoid using external packages for the moment):
+
+```{r}
+expm = function(M, iter){ # matrix and number of iterations (the more the better)
+  if (missing(iter)){     # if i is not given, the last element is used 
+    iter=100
+  }
+  res=diag(length(M[1,]))
+  power=M
+  for (i in 1:iter){
+    res = res + power/factorial(i)
+    power = power%*%M
+  }
+  return(res)
+}
+```
+
+It works quite well!
+```{r} 
+test1 <- t(matrix(c(4, 2, 0,1, 4, 1,1, 1, 4), 3, 3))
+expm(test1,100)
+```
+
+Of course, this was not needed. I did not realise the dimensions.
+
+Now, the inverse ilr (only for the D=3 case): $x=\mathrm{ilr}^{-1}(\mathbf{x}^*) = \mathcal{C}(\exp(\mathbf{V}_D x^*)$ 
+
+```{r}
+inverseilr=function(x){ # x is x*, vec of coordinates
+  V3 = matrix(c(sqrt(2/3),-sqrt(1/6),-sqrt(1/6)))
+  V3 <- cbind(V3, c(0,sqrt(1/2),-sqrt(1/2))) # defining V3
+  return(C(t((exp(V3%*%x)))))
+}
+```
+
+
+
+Testing the new function for $x_3$, we should have $\mathrm{ilr}^{-1}(\mathrm{ilr(\mathbf{x})})=\mathbf{x}$. Perfect! _(there was a bug in previous versions, I forgot a "log" somewhere)_
+
+```{r}
+x3
+```
+
+```{r}
+inverseilr(ilr(x3))
+```
+
+
+Now that I have read in the transformations document the explicit formula of $\mathbf{V}$ I can make a function to compute it here:
+
+```{r}
+V_D = function(D){ # D is the dimension (parts)
+  V_D = matrix(0L, nrow =D , ncol = D-1)
+  for (i in 1:(D-1)){  # pseudodiagonal elements
+    V_D[i,i] = (D-i)/(sqrt((D-i+1)*(D-i)))
+  }
+  for (i in 2:D){ # below pseudodiagonal elements
+    for (j in 1:i-1){
+      V_D[i,j]=-1/(sqrt((D-j+1)*(D-j)))
+    }
+  } 
+  return(V_D)
+}
+```
+
+The matrix $V_3$ had been computed previously. It is checked that they coincide:
+
+```{r}
+V3 = matrix(c(sqrt(2/3),-sqrt(1/6),-sqrt(1/6)))
+V3 <- cbind(V3, c(0,sqrt(1/2),-sqrt(1/2))) # defining V3 as before
+V3
+
+V_D(3) # our brand new function
+```
+
+Now, it is possible to update the ilr function:
+
+```{r}
+ilr = function(x){ # x matrix N x D
+  x = C(x)
+  V = V_D(dim(x)[2])
+  return(t(t(V)%*%t(log(x))))
+}
+```
+
+
+```{r}
+ilr(C(testvec))
+```
+
+
+
+```{r}
+testvec = t(matrix(c(1,2,4)))
+ilr(testvec)
+```
+
+However... (I can assume the first and the second coordinates are interchangables, and also that (x,y), (-x, -y) are equivalent representations, but...). I have found that the 'compositions' package what does here is $\mathrm{ilr}(x) = V^T \mathrm{clr}(x)$.
+
+```{r}
+ac = c(1,2,4)
+(ac = acomp(ac))
+
+compositions::ilr(ac)
+```
+
+
+## 1.3. Regressions
+
+The good news is that the ilr transformation defined previously works with (the transpose of) matrices; the bad is that the regression cannot be done yet (remark that both the independent and dependent variables could be matrices). 
+
+```{r}
+ilr(m2[1,])
+```
+
+```{r}
+ilr(t(m2))
+```
+
+## 1.4. Descriptive Analysis of Compositional Data
+
+### Function 12. The _compositional mean_.
+
+The compositional mean of a variable $\mathbf{x}$ is given by:
+
+**EQUÍ EMPOBINAR L'ECUACION**
+
+
+```{r}
+c_mean=function(x){ #x is a matrix NxD
+  mult = t(matrix(x[1,]))
+  for (i in (2:(dim(x)[1]))){
+    mult=pt(mult,t(matrix(x[i,])))
+  }
+  res = pw(1/dim(x)[1], mult)
+  return(res)
+}
+```
+
+For example:
+
+```{r}
+c_mean(m1)
+```
+
+And it coincides with the 'compositions' package mean:
+
+```{r}
+mean(acomp(m1))
+```
+
